@@ -1,0 +1,6 @@
+tensorflow==1.13
+py3nvml
+scipy
+sklearn
+
+
