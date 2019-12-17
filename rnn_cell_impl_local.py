@@ -201,7 +201,7 @@ class RNNCell(base_layer.Layer):
     # difference between TF and Keras RNN cell.
     self._is_tf_rnn_cell = True
 
-  def __call__(self, inputs, state, input_nextt_gate, scope=None):
+  def __call__(self, inputs, state, scope=None):
     """Run this RNN cell on inputs, starting from the given state.
 
     Args:
@@ -1272,7 +1272,7 @@ class DropoutWrapper(RNNCell):
           shallow_filtered_substructure, dropout,
           *[shallow_filtered_substructure, values, recurrent_noise])
 
-  def __call__(self, inputs, state, input_nextt_gate, scope=None):
+  def __call__(self, inputs, state, scope=None):
     """Run the cell with the declared dropouts."""
     def _should_dropout(p):
       return (not isinstance(p, float)) or p < 1
@@ -1281,7 +1281,7 @@ class DropoutWrapper(RNNCell):
       inputs = self._dropout(inputs, "input",
                              self._recurrent_input_noise,
                              self._input_keep_prob)
-    output, new_state = self._cell(inputs, state, input_nextt_gate, scope=scope)
+    output, new_state = self._cell(inputs, state, scope=scope)
     if _should_dropout(self._state_keep_prob):
       # Identify which subsets of the state to perform dropout on and
       # which ones to keep.

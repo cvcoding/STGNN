@@ -35,7 +35,7 @@ from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.util import deprecation
 from tensorflow.python.util import nest
 from tensorflow.python.util.tf_export import tf_export
-
+import tensorflow as tf
 
 # pylint: disable=protected-access
 _concat = rnn_cell_impl_local_scd._concat
@@ -691,23 +691,22 @@ def _dynamic_rnn_loop(cell,
     else:
       input_t = tuple(ta[time.numpy()] for ta in input_ta)
 
-    # if in_graph_mode:
-    #     input_nextt = tuple(ta.read(time+1) for ta in input_ta)
-    # else:
-    #     input_nextt = tuple(ta[time.numpy()+1] for ta in input_ta)
+    if in_graph_mode:
+        input_nextt = tuple(ta.read(time+1) for ta in input_ta)
+    else:
+        input_nextt = tuple(ta[time.numpy()+1] for ta in input_ta)
 
     input_t = nest.pack_sequence_as(structure=inputs, flat_sequence=input_t)
-    i_size = input_t.get_shape().as_list()[1]
-    input_tdata = input_t[:,0:i_size-1]
-    input_t_gate = input_t[:, i_size - 1]
-    # input_nextt = nest.pack_sequence_as(structure=inputs, flat_sequence=input_nextt)
-    # input_nextt_gate = input_nextt[:,i_size-1]
+    dimension1layer = input_t.get_shape().as_list()[1]-1
+    input_tdata = input_t[:, 0:dimension1layer]
+    input_nextt = nest.pack_sequence_as(structure=inputs, flat_sequence=input_nextt)
+    input_nextt_gate = input_nextt[:, dimension1layer]
 
     # Keras RNN cells only accept state as list, even if it's a single tensor.
     is_keras_rnn_cell = _is_keras_rnn_cell(cell)
     if is_keras_rnn_cell and not nest.is_sequence(state):
       state = [state]
-    call_cell = lambda: cell(input_tdata, state, input_t_gate, output_ta_t, time)
+    call_cell = lambda: cell(input_tdata, state, input_nextt_gate, output_ta_t, time)
 
     if sequence_length is not None:
       (output, new_state) = _rnn_step(

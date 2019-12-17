@@ -46,8 +46,6 @@ class TrainAgent(object):
         if args.cell == 'Reslstm':
             args.chrono = True
 
-        # self.is_training = True
-
     def train(self, data_path, max_gradient_norm, weight_decay, test_agent,
               args):
         data_list = load_data(data_path, seq_len=args.T)
@@ -65,7 +63,6 @@ class TrainAgent(object):
                           cell_type=args.cell,
                           chrono=args.chrono,
                           mse=self.mse,
-                          batch_size=args.batch_size,
                           )
         model.build(self.output_format)
 
@@ -118,9 +115,9 @@ class TrainAgent(object):
                                   model.training: True,
                                   model.keep_prob: args.keep_prob,
                                   }
-                    _, loss, output_probs, mask = sess.run(
+                    _, loss, output_probs = sess.run(
                         [model.train_opt, model.loss_nowd,
-                         model.output_probs, model.mask],
+                         model.output_probs],
                         input_feed)
 
                     if np.isnan(loss):
@@ -146,50 +143,13 @@ class TrainAgent(object):
                         y, np.argmax(output_probs, axis=1)) / \
                         float(len(minibatch_indices))
 
-                maskout = mask[120, :]
-                maskout = maskout[np.newaxis, ...]
-                np.savetxt('.\masknoround1.txt', maskout, '%.0f')
-
-                # maskout1 = mask[1, :,0]
-                # maskout1 = maskout1[np.newaxis, ...]
-                # maskout2 = mask[120, :, 1]
-                # maskout2 = maskout2[np.newaxis, ...]
-                # np.savetxt('D:\sparse_lstm_code\BiL_m_fstb_nor\masknoround1.txt', maskout1, '%d')
-                # np.savetxt('D:\sparse_lstm_code\BiL_m_fstb_nor\masknoround2.txt', maskout2, '%d')
-                if 'mnist' in args.data:
-
-                    minibatch_indices_vld = get_minibatches_indices(
-                        len(x_valid), args.batch_size)
-                    for b_num, b_indices in enumerate(minibatch_indices_vld):
-                        print('\rProcessing batch {}/{}'.format(
-                            b_num, len(minibatch_indices_vld)), end='', flush=True)
-
-                        x = [x_valid[i] for i in b_indices]
-                        y = y_valid[b_indices]
-
-                        x, seq_lengths = pad_seqs(x)
-
-                        input_feed = {model.x: x,
-                                      model.y: y,
-                                      model.seq_lens: seq_lengths,
-                                      model.training: False,
-                                      model.keep_prob: args.keep_prob,
-                                      }
-                        loss, output_probs = sess.run(
-                            [model.loss_nowd, model.output_probs],
-                            input_feed)
-
-                        eval_metrics[len(train_tags)] += loss / float(len(minibatch_indices_vld))
-
-                        eval_metrics[len(train_tags) + 1:2 * len(train_tags)] += calculate_metrics(
-                            y, np.argmax(output_probs, axis=1)) / \
-                                            float(len(minibatch_indices_vld))
-                    # # Compute validation loss and accuracy
-                    # eval_metrics[len(train_tags)], output_probs = sess.run(
-                    #     v_output_feed, v_input_feed)
-                    # eval_metrics[len(train_tags)+1:2*len(train_tags)] += \
-                    #     calculate_metrics(y_valid,
-                    #                       np.argmax(output_probs, axis=1))
+                if 'add' in args.data:
+                    # Compute validation loss and accuracy
+                    eval_metrics[len(train_tags)], output_probs = sess.run(
+                        v_output_feed, v_input_feed)
+                    eval_metrics[len(train_tags)+1:2*len(train_tags)] += \
+                        calculate_metrics(y_valid,
+                                          np.argmax(output_probs, axis=1))
 
                     epoch_duration = time.time() - start_time
 
@@ -236,9 +196,5 @@ class TrainAgent(object):
                     print()
                     print(args.name + ": Epoch {}/{}".format(e, args.epochs))
 
-            maskout = mask[1, :]
-            maskout = maskout[np.newaxis, ...]
-            np.savetxt('D:\sparse_lstm_code\BiLayers_mask\mask.txt', maskout, '%d')
-
-        if 'mnist' in args.data:
+        if 'add' in args.data:
             test_agent.test(x_test, y_test, self.save_path, self.config)

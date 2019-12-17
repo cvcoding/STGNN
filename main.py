@@ -17,19 +17,19 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--name", type=str,
-                        default="standard0",
+                        default="standard1",
                         help="[%(default)s] A string to describe this model")
     parser.add_argument("--data", type=str,
-                        default='pmnist',
+                        default='add',
                         choices=['pmnist','mnist','add','copy'],
                         help="[%(default)s] Path to the dataset.")
     parser.add_argument("--layers", type=str,
-                        default="256,256",  # why 8 and 128, because shunshi memory will not
+                        default="64,64",  # why 8 and 128, because shunshi memory will not
                         # allocate too much computation resource.
                         help="[%(default)s] A comma-separated list"
                         " of the layer sizes")
     parser.add_argument("--batch_size", type=int,
-                        default=275,
+                        default=200,
                         help="[%(default)s] The batch size to train with")
     parser.add_argument("--keep_prob", type=float,
                         default=0.9,
@@ -56,13 +56,13 @@ def parse_args():
                         help="[%(default)s] The directory to write"
                         " tensoboard logs to")
     parser.add_argument("--gpu", type=str,
-                        default='1',
+                        default=None,
                         help="[%(default)s] The specific GPU to train on.")
     parser.add_argument('--wd', type=float,
                         default=0.0,
                         help='[%(default)s] weight decay importance')
     parser.add_argument('--results_file', type=str,
-                        default='None',
+                        default=None,
                         help='[%(default)s] The file to append results to. '
                         ' If set, nothing else will be logged or saved.')
     parser.add_argument('--chrono', action='store_true',
@@ -74,7 +74,7 @@ def parse_args():
                         choices=['Reslstm','lstm','rnn'],
                         help='[%(default)s] The type of cell to use.')
     parser.add_argument("--T", type=int,
-                        default=200,
+                        default=120,
                         help="[%(default)s] Sequence length for add/copy.")
     parser.add_argument("--log_every", type=int,
                         default=200000,
@@ -91,6 +91,15 @@ def test_wrapper(test_agent, args):
 
 
 def main(args):
+    # if args.gpu is not None:
+    #     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+    # else:
+    #     try:
+    #         import py3nvml
+    #         py3nvml.grab_gpus(0, gpu_fraction=0.95)
+    #     except ImportError:
+    #         print("Could not import py3nvml")
+
     if args.test:
         # Get the config
         with open(os.path.join('models',args.name,'config.json')) as fp:
