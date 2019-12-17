@@ -28,10 +28,10 @@ def load_data(dataset_name, seq_len=200):
         return get_mnist(permute=True)
 
     if dataset_name == 'add':
-        x, y = get_add(n_data=150000, seq_len=seq_len)
+        x, y = get_add(n_data=50000, seq_len=seq_len)
 
     if dataset_name == 'copy':
-        return get_copy(n_data=150000, seq_len=seq_len)
+        return get_copy(n_data=50000, seq_len=seq_len)
 
     train_idx, valid_idx, test_idx = randomly_split_data(
         y, test_frac=0.2, valid_frac=0.1)
@@ -46,16 +46,31 @@ def load_data(dataset_name, seq_len=200):
     return x_train, y_train, x_valid, y_valid, x_test, y_test
 
 
-def get_add(n_data, seq_len):
-    x = np.zeros((n_data, seq_len, 2))
-    x[:,:,0] = np.random.uniform(low=0., high=1., size=(n_data, seq_len))
-    inds = np.random.randint(seq_len/2, size=(n_data, 2))
-    inds[:,1] += seq_len//2
+def get_add3(n_data, seq_len):
+    x = np.zeros((n_data, seq_len, 3))
+    x[:,:,0] = np.random.uniform(low=-0.5, high=0.5, size=(n_data, seq_len))
+    inds = np.random.randint(seq_len/10, size=(n_data, 3))
+    inds[:, 1] += (seq_len*2)//5
+    inds[:, 2] += (seq_len * 4) // 5
     for i in range(n_data):
         x[i,inds[i,0],1] = 1.0
         x[i,inds[i,1],1] = 1.0
+        x[i,inds[i,2],1] = 1.0
 
     y = (x[:,:,0] * x[:,:,1]).sum(axis=1)
+    y = np.reshape(y, (n_data, 1))
+    return x, y
+
+
+def get_add(n_data, seq_len):
+    x = np.zeros((n_data, seq_len, 2))
+    x[:, :, 0] = np.random.uniform(low=-0.5, high=0.5, size=(n_data, seq_len))
+    inds = np.random.randint(seq_len/10, size=(n_data, 2))
+    inds[:, 1] += (seq_len*4)//5
+    for i in range(n_data):
+        x[i, inds[i, 0], 1] = 1.0
+        x[i, inds[i, 1], 1] = 1.0
+    y = (x[:, :, 0] * x[:, :, 1]).sum(axis=1)
     y = np.reshape(y, (n_data, 1))
     return x, y
 
@@ -73,7 +88,7 @@ def get_copy(n_data, seq_len):
     x = one_hot_sequence(x)
     y = one_hot_sequence(y)
 
-    n_train, n_valid, n_test = [100000, 10000, 40000]
+    n_train, n_valid, n_test = [30000, 5000, 15000]
     x_train = list(x[:n_train])
     y_train = y[:n_train]
     x_valid = list(x[n_train:n_train+n_valid])

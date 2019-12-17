@@ -1,2 +1,2 @@
-# STGNN
-STGNN model and others for comparison
+# DilatedRNN
+Implementation of Dilated Recurrent Neural Networks paper in TensorFlow
