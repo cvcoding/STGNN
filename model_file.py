@@ -1,15 +1,11 @@
 import tensorflow as tf
-from aux_code.rnn_cells import CustomLSTMCell, ScdLSTMCell
+from aux_code.rnn_cells import CustomLSTMCell
 from aux_code.tf_ops import linear
-import rnn_local, rnn_local_scd
-import rnn_cell_impl_local, rnn_cell_impl_local_scd
-from tensorflow.python.framework import ops
-import numpy as np
 
 
 def rnn(x, h_dim, y_dim, keep_prob, sequence_lengths,
         training, output_format, cell_type='janet',
-        t_max=None, batch_size=0):
+        t_max=None):
     '''
     Inputs:
     x - The input data.
@@ -22,123 +18,56 @@ def rnn(x, h_dim, y_dim, keep_prob, sequence_lengths,
     The non-softmaxed output of the LSTM.
     '''
 
-    def _binary_round(x):
-        g = tf.get_default_graph()
-        with ops.name_scope("BinaryRound") as name:
-            with g.gradient_override_map({"Round": "Identity"}):
-                return tf.round(x, name=name)
+    def single_cell(dim, output_projection=None):
+        if cell_type == 'lstm':
+            cell = CustomLSTMCell(dim, t_max=t_max, forget_only=False)
+        elif cell_type == 'janet':
+            cell = CustomLSTMCell(dim, t_max=t_max, forget_only=True)
+        elif cell_type == 'rnn':
+            print('Using the standard RNN cell')
+            cell = tf.contrib.rnn.BasicRNNCell(dim)
 
-    def init_mask(t_max):
-        def _initializer(shape, dtype=tf.float32, partition_info=None):
-            bias_j = 0.5*tf.ones([t_max, 1])
-            return bias_j
-        return _initializer
-
-    def init_u(t_max):
-        def _initializer(shape, dtype=tf.float32, partition_info=None):
-            bias_j = 1*tf.ones([1, t_max])
-            return bias_j
-        return _initializer
-
-    def init_D(t_max):
-        def _initializer(shape, dtype=tf.float32, partition_info=None):
-            bias_j = 1*tf.ones([1, t_max])  # 0.5
-            return bias_j
-        return _initializer
-
-    def weight_initializer(num_gates):
-        def _initializer(shape, dtype=tf.float32, partition_info=None):
-            p = np.zeros(shape)
-            num_units = int(shape[0] // num_gates)
-            p[-num_units:] = 1*np.ones(num_units)
-            return tf.constant(p, dtype)
-        return _initializer
-
-    def bias_initializer(num_gates):
-        def _initializer(shape, dtype=tf.float32, partition_info=None):
-            p = np.zeros(shape)
-            num_units = int(shape[0] // num_gates)
-            p[-num_units:] = 1*np.zeros(num_units)
-            return tf.constant(p, dtype)
-        return _initializer
-
-    def fst_cell(dim, output_projection=None):
-        cell = CustomLSTMCell(dim, t_max=t_max, forget_only=True)
-        drop_cell = rnn_cell_impl_local.DropoutWrapper(
+        drop_cell = tf.contrib.rnn.DropoutWrapper(
             cell,
             input_keep_prob=1,
             output_keep_prob=keep_prob)
         return drop_cell
 
-    def scd_cell(dim, output_projection=None):
-        cell = ScdLSTMCell(dim, t_max=t_max, forget_only=True)
-        drop_cell = rnn_cell_impl_local_scd.DropoutWrapper(
-            cell,
-            input_keep_prob=1,
-            output_keep_prob=keep_prob)
-        return drop_cell
-
-    fstcell = fst_cell(h_dim[0])
-    scdcell = scd_cell(h_dim[1])
+    if len(h_dim) > 1:
+        # Multilayer RNN
+        cell = tf.contrib.rnn.MultiRNNCell(
+            [single_cell(dim) for dim in h_dim])
+    else:
+        cell = single_cell(h_dim[0])
 
     if output_format == 'last':
-
-        x = tf.layers.batch_normalization(x)
-        mask_weight = tf.get_variable('mask_weight', [1, 1], initializer=weight_initializer(1))
-
-        # mask_weight = tf.get_variable('mask_weight', [1, 1])
-        mask_bias = tf.get_variable('mask_bias', [1], initializer=bias_initializer(1))
-        x1 = tf.reshape(x, [batch_size*t_max, 1])
-
-        mask = tf.nn.bias_add(tf.matmul(x1, mask_weight), mask_bias)
-        mask = tf.reshape(mask, [batch_size, t_max])
-
-        u = tf.get_variable('u', [1, t_max], initializer=init_u(t_max))
-        u = tf.tile(u, [batch_size, 1])
-        D = tf.get_variable('D', [1, t_max], initializer=init_D(t_max))
-        D = tf.tile(D, [batch_size, 1])
-        D_diag = tf.matrix_diag(D)
-
-        # sparse func
-        mask = 1-tf.nn.relu(0.5*(tf.nn.tanh(mask + u) + tf.nn.tanh(mask - u)))
-        # mask = tf.sigmoid(mask)
-        # mask = 1 - _binary_round(mask)
-        mask = _binary_round(mask)
-        mask = tf.expand_dims(mask, 2)
-        mask_weighted = tf.matmul(D_diag, mask)
-
-        new_x = tf.concat([x, mask], 2)
-        out, _ = rnn_local.dynamic_rnn(
-            fstcell, new_x, sequence_length=sequence_lengths,
+        _, final_state = tf.nn.dynamic_rnn(
+            cell, x, sequence_length=sequence_lengths,
             dtype=tf.float32)
 
-        # out = tf.layers.batch_normalization(out)
-
-        out = out * mask_weighted
-        new_out = tf.concat([out, mask], 2)
-        mask1dim_out = tf.squeeze(mask)
-
-        _, final_state = rnn_local_scd.dynamic_rnn(
-            scdcell, new_out, sequence_length=sequence_lengths,
-            dtype=tf.float32)
-
-        out = final_state
-        if cell_type == 'lstm' or cell_type == 'Reslstm':
-            out = out[1]
-
-        # out = tf.layers.batch_normalization(out)
+        # self.final_state is a tuple with
+        # (state.c, state.h)
+        if len(h_dim) > 1:
+            # If we have a multi-layer rnn, get the top layer state
+            out = final_state[-1]
+            if cell_type == 'lstm' or cell_type == 'janet':
+                out = out[1]
+        else:
+            out = final_state
+            if cell_type == 'lstm' or cell_type == 'janet':
+                out = out[1]
 
         proj_out = linear(out, y_dim, scope='output_mapping')
     elif output_format == 'all':
         out, _ = tf.nn.dynamic_rnn(
-            fstcell, x, sequence_length=sequence_lengths,
+            cell, x, sequence_length=sequence_lengths,
             dtype=tf.float32)
         flat_out = tf.reshape(out, (-1, out.get_shape()[-1]))
         proj_out = linear(flat_out, y_dim, scope='output_mapping')
         proj_out = tf.reshape(proj_out,
                               (tf.shape(out)[0], tf.shape(out)[1], y_dim))
 
-    return proj_out, mask1dim_out
+    return proj_out
 
 
 class RNN_Model(object):
@@ -146,7 +75,7 @@ class RNN_Model(object):
     def __init__(self, n_features, n_classes, h_dim, max_sequence_length,
                  is_test=False, max_gradient_norm=None, opt_method='adam',
                  learning_rate=0.001, weight_decay=0,
-                 cell_type='lstm', chrono=False, mse=False, batch_size=0,
+                 cell_type='lstm', chrono=False, mse=False,
                  ):
         self.n_features = n_features
         self.n_classes = n_classes
@@ -160,7 +89,6 @@ class RNN_Model(object):
         self.cell_type = cell_type
         self.chrono = chrono
         self.mse = mse
-        self.batch_size = batch_size
 
     def build_inputs(self):
         self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
@@ -176,7 +104,7 @@ class RNN_Model(object):
                                        name="sequence_lengths")
         self.training = tf.placeholder(tf.bool)
 
-    def build_loss(self, outputs, mask):
+    def build_loss(self, outputs):
         if self.mse:
             mean_squared_error = tf.losses.mean_squared_error(
                 labels=self.y, predictions=outputs)
@@ -202,9 +130,7 @@ class RNN_Model(object):
                                                    tf.trainable_variables()
                                                    if 'bias' not in v.name])
         tf.summary.scalar('weight_decay', weight_decay)
-
-        mask_norm = 1e-6*tf.norm(mask, 1)  #tf.nn.l2_loss(mask)
-        self.loss = self.loss_nowd + weight_decay + mask_norm
+        self.loss = self.loss_nowd + weight_decay
 
     def build_optimizer(self):
         if self.opt_method == 'adam':
@@ -238,14 +164,13 @@ class RNN_Model(object):
         if self.chrono:
             t_max = self.max_sequence_length
 
-        outputs, mask = rnn(self.x, self.h_dim, self.n_classes, self.keep_prob,
+        outputs = rnn(self.x, self.h_dim, self.n_classes, self.keep_prob,
                       sequence_lengths=self.seq_lens,
                       training=self.training, output_format=output_format,
-                      cell_type=self.cell_type, t_max=t_max, batch_size=self.batch_size,
+                      cell_type=self.cell_type, t_max=t_max,
                       )
-        self.mask = mask
 
-        self.build_loss(outputs, mask)
+        self.build_loss(outputs)
 
         self.output_probs = tf.nn.softmax(outputs)
         if self.output_seq:
@@ -257,3 +182,4 @@ class RNN_Model(object):
             self.build_optimizer()
 
         self.summary_op = tf.summary.merge_all()
+

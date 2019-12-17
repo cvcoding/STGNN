@@ -28,7 +28,7 @@ def load_data(dataset_name, seq_len=200):
         return get_mnist(permute=True)
 
     if dataset_name == 'add':
-        x, y = get_add(n_data=150000, seq_len=seq_len)
+        x, y = get_add(n_data=50000, seq_len=seq_len)
 
     if dataset_name == 'copy':
         return get_copy(n_data=150000, seq_len=seq_len)
@@ -48,9 +48,9 @@ def load_data(dataset_name, seq_len=200):
 
 def get_add(n_data, seq_len):
     x = np.zeros((n_data, seq_len, 2))
-    x[:,:,0] = np.random.uniform(low=0., high=1., size=(n_data, seq_len))
-    inds = np.random.randint(seq_len/2, size=(n_data, 2))
-    inds[:,1] += seq_len//2
+    x[:,:,0] = np.random.uniform(low=-0.5, high=0.5, size=(n_data, seq_len))
+    inds = np.random.randint(seq_len/10, size=(n_data, 2))
+    inds[:,1] += (seq_len*4)//5
     for i in range(n_data):
         x[i,inds[i,0],1] = 1.0
         x[i,inds[i,1],1] = 1.0
