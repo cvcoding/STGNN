@@ -1,7 +1,9 @@
 import os
 # Turn off the tensorflow warnings about code not being compiled with some
 # optimizations. (switch off warning logging, but not error logging)
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' # noqa
 os.environ['CUDA_VISIBLE_DEVICES'] = '0' # noqa
+
 import argparse
 import json
 
@@ -24,12 +26,11 @@ def parse_args():
                         choices=['pmnist','mnist','add','copy'],
                         help="[%(default)s] Path to the dataset.")
     parser.add_argument("--layers", type=str,
-                        default="256,256",  # why 8 and 128, because shunshi memory will not
-                        # allocate too much computation resource.
+                        default="256",
                         help="[%(default)s] A comma-separated list"
                         " of the layer sizes")
     parser.add_argument("--batch_size", type=int,
-                        default=275,
+                        default=200,
                         help="[%(default)s] The batch size to train with")
     parser.add_argument("--keep_prob", type=float,
                         default=0.9,
@@ -56,13 +57,13 @@ def parse_args():
                         help="[%(default)s] The directory to write"
                         " tensoboard logs to")
     parser.add_argument("--gpu", type=str,
-                        default='1',
+                        default='0',
                         help="[%(default)s] The specific GPU to train on.")
     parser.add_argument('--wd', type=float,
                         default=0.0,
                         help='[%(default)s] weight decay importance')
     parser.add_argument('--results_file', type=str,
-                        default='None',
+                        default='D:/code/janet-master/janet-master/result',
                         help='[%(default)s] The file to append results to. '
                         ' If set, nothing else will be logged or saved.')
     parser.add_argument('--chrono', action='store_true',
@@ -70,11 +71,11 @@ def parse_args():
     parser.add_argument('--log_test', action='store_true',
                         help='[False] Log test data metrics on TB.')
     parser.add_argument('--cell', type=str,
-                        default='Reslstm',
-                        choices=['Reslstm','lstm','rnn'],
+                        default='lstm',
+                        choices=['janet','lstm','rnn'],
                         help='[%(default)s] The type of cell to use.')
     parser.add_argument("--T", type=int,
-                        default=200,
+                        default=120,
                         help="[%(default)s] Sequence length for add/copy.")
     parser.add_argument("--log_every", type=int,
                         default=200000,
